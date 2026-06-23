@@ -1,0 +1,49 @@
+{
+  "cookies": [
+    {
+      "name": "serviceToken",
+      "value": "ST_abc123def456ghi789jkl012",
+      "domain": ".xiaomimimo.com",
+      "path": "/",
+      "expires": 1760731860,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "session",
+      "value": "sess_xm_01J2XYZ789ABCDEFGHIJKLMNOP",
+      "domain": ".account.xiaomi.com",
+      "path": "/",
+      "expires": 1760731860,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "userId",
+      "value": "1234567890",
+      "domain": ".xiaomimimo.com",
+      "path": "/",
+      "expires": 1760731860,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "localStorage": {
+    "token": "xm_jwt_eyJhbG...mple",
+    "userInfo": "{\"userId\":1234567890,\"nickname\":\"MiMoUser\",\"avatar\":\"https://avatar.example.com/default.png\"}",
+    "settings": "{\"theme\":\"light\",\"language\":\"zh\"}",
+    "recent_models": "[\"MiMo-v2.5-pro\",\"MiMo-v2.5-flash\"]"
+  },
+  "metadata": {
+    "provider": "mimo",
+    "provider_host": "aistudio.xiaomimimo.com",
+    "created_at": 1718563200,
+    "expires_at": 1760731860,
+    "expires_after_seconds": 43200000,
+    "refresh_token": "",
+    "provider_version": "0.1.0"
+  }
+}

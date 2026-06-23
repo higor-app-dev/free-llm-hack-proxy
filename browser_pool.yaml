@@ -1,0 +1,9 @@
+# Browser pool config — no browser instances for testing HTTP API
+heartbeat_interval: 0s
+default_launch_opts:
+  headless: true
+providers:
+  deepseek:
+    slots: 0
+  mimo:
+    slots: 0

@@ -1,0 +1,59 @@
+{
+  "cookies": [
+    {
+      "name": "cloud_session",
+      "value": "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+      "domain": ".deepseek.com",
+      "path": "/",
+      "expires": 1760731860,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sessionid",
+      "value": "sess_01J2XYZ789ABCDEFGHIJKLMNOP",
+      "domain": "chat.deepseek.com",
+      "path": "/",
+      "expires": 1760731860,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "auth_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+      "domain": ".deepseek.com",
+      "path": "/api",
+      "expires": 1760731860,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "user_pref",
+      "value": "lang=en&theme=dark",
+      "domain": "chat.deepseek.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "localStorage": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzQyIiwicm9sZSI6ImZyZWUiLCJleHAiOjE3NjA3MzE4NjB9.example",
+    "user": "{\"id\":42,\"name\":\"John Doe\",\"email\":\"john@example.com\",\"tier\":\"free\"}",
+    "settings": "{\"theme\":\"dark\",\"language\":\"en\",\"notifications\":true}",
+    "ui_state": "{\"sidebar_open\":true,\"last_conversation_id\":\"conv_abc123\"}"
+  },
+  "metadata": {
+    "provider": "deepseek",
+    "provider_host": "chat.deepseek.com",
+    "created_at": 1718563200,
+    "expires_at": 1760731860,
+    "expires_after_seconds": 43200000,
+    "refresh_token": "rt_ds_refresh_abc123def456ghi789",
+    "provider_version": "0.1.0"
+  }
+}
