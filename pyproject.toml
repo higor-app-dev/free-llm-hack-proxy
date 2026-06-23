@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0",
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
+    "playwright>=1.40",
 ]
 
 [project.scripts]

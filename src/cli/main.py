@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """CLI for the free-llm-hack-proxy using Typer and Rich.
 
-Four commands:
-  - start:   Launch the proxy server
-  - login:   Authenticate with a provider
-  - status:  Show connection health
-  - models:  List available models from a provider
+Six commands:
+  - start:         Launch the proxy server
+  - login:         Authenticate with a provider
+  - browser-login: Interactive browser-based authentication
+  - refresh:       Silently refresh an expired browser session
+  - status:        Show connection health
+  - models:        List available models from a provider
 """
 
 from __future__ import annotations
@@ -83,11 +85,20 @@ def start(
     workers: Optional[int] = typer.Option(
         None, "--workers", "-w", help="Override worker count from config"
     ),
+    check_sessions: bool = typer.Option(
+        False,
+        "--check-sessions",
+        help="Check all stored sessions on startup and refresh any that are expired",
+    ),
 ) -> None:
     """🚀 Start the proxy server.
 
     Reads host, port, workers, and reload from the global config
     (``~/.llm-proxy/config.yaml``).  CLI flags override config values.
+
+    Use ``--check-sessions`` to validate all stored browser sessions
+    before the proxy starts serving — expired ones are refreshed via the
+    interactive browser login.
     """
     cfg = _ensure_config()
     srv = cfg.server
@@ -96,6 +107,43 @@ def start(
     actual_port = port or srv.port
     actual_workers = workers if workers is not None else srv.workers
     actual_reload = reload if reload is not None else srv.reload
+
+    # --- Session check on startup ---
+    if check_sessions:
+        console.print(
+            Panel.fit(
+                "[bold yellow]Checking stored sessions...[/]",
+                border_style="yellow",
+            )
+        )
+        from src.utils.session import (
+            list_sessions,
+            refresh_session,
+        )
+
+        stored_hosts = list_sessions()
+        if not stored_hosts:
+            console.print(
+                "  [yellow]No stored sessions found.[/]  "
+                "Use [bold]llm-proxy browser-login <host>[/] first.\n"
+            )
+        else:
+            refreshed: list[str] = []
+            valid: list[str] = []
+            for stored_host in stored_hosts:
+                console.print(f"  Checking [cyan]{stored_host}[/]...", end="")
+                try:
+                    refresh_session(stored_host, silent=True)
+                    console.print(" [green]✓[/]")
+                    refreshed.append(stored_host)
+                except RuntimeError:
+                    console.print(" [yellow]⚠ refresh failed (launch manually)[/]")
+
+            if refreshed:
+                console.print(
+                    f"\n[green]✓[/] Refreshed {len(refreshed)} session(s): "
+                    f"{', '.join(refreshed)}\n"
+                )
 
     console.print(
         Panel.fit(
@@ -260,6 +308,115 @@ def _update_default_provider(name: str) -> None:
     config_path.write_text(
         yaml.dump(data, default_flow_style=False, sort_keys=False),
         encoding="utf-8",
+    )
+
+
+# ---------------------------------------------------------------------------
+# browser-login — interactive browser-based authentication
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="browser-login")
+def browser_login(
+    host_or_url: str = typer.Argument(
+        ..., help="Hostname (e.g. chatgpt.com) or full URL to log in to"
+    ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="Provider name — use its base_url instead of the raw host/URL",
+    ),
+    save_as: Optional[str] = typer.Option(
+        None,
+        "--save-as",
+        help="Session filename stem (defaults to hostname from the URL)",
+    ),
+) -> None:
+    """🌐 Log in via browser and save the session state (cookies + localStorage).
+
+    Opens a Chromium window at the given URL so you can log in
+    interactively.  When you press **Enter** in the terminal, the cookies
+    and ``localStorage`` are captured and persisted to
+    ``~/.llm-proxy/sessions/<host>.json`` for later reuse.
+    """
+    from src.cli.browser_login import capture_storage_state_interactive
+    from src.utils.session import save_storage_state
+
+    # Resolve the actual URL to navigate to
+    resolved_host: str = host_or_url
+
+    if provider:
+        try:
+            from src.providers import load_provider_config
+
+            prov = load_provider_config(provider)
+            if prov.base_url:
+                resolved_host = prov.base_url
+                console.print(
+                    f"  Using [bold]{provider}[/] provider URL: "
+                    f"[cyan]{resolved_host}[/cyan]"
+                )
+            else:
+                console.print(
+                    f"  [yellow]Provider {provider} has no base_url;[/] "
+                    f"falling back to [cyan]{host_or_url}[/cyan]"
+                )
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"  [red]Could not load provider {provider}: {exc}[/red]")
+            raise typer.Exit(code=1)
+
+    console.print(
+        Panel.fit(
+            "[bold yellow]Browser login[/]\n\n"
+            f"  URL: [cyan]{resolved_host}[/cyan]\n\n"
+            "  A Chromium window will open. Log in there, then\n"
+            "  come back to this terminal and press Enter.\n",
+            border_style="yellow",
+        )
+    )
+
+    try:
+        state = capture_storage_state_interactive(resolved_host)
+    except RuntimeError as exc:
+        console.print(f"\n[red]✗[/] {exc}")
+        raise typer.Exit(code=1)
+
+    # Determine the session filename stem
+    from urllib.parse import urlparse
+
+    parsed = urlparse(state.get("origin", resolved_host))
+    session_key = (
+        save_as
+        or parsed.hostname
+        or state.get("origin", "")
+        .replace("https://", "")
+        .replace("http://", "")
+        .split("/")[0]
+        or "unknown"
+    )
+
+    # Strip the storage state down to the keys we persist
+    persist = {
+        "cookies": state.get("cookies", []),
+        "localStorage": state.get("localStorage", {}),
+    }
+
+    path = save_storage_state(session_key, persist)
+    cookie_count = len(persist["cookies"])
+    ls_count = len(persist["localStorage"])
+
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold green]✓ Session saved[/bold green]\n\n"
+            f"  File:   [dim]{path}[/dim]\n"
+            f"  Host:   [cyan]{session_key}[/cyan]\n"
+            f"  Origin: [cyan]{state.get('origin', '—')}[/cyan]\n"
+            f"  Cookies:  [green]{cookie_count}[/green]\n"
+            f"  Storage keys: [green]{ls_count}[/green]\n",
+            border_style="green",
+        )
     )
 
 
@@ -450,6 +607,76 @@ def models(
 
     console.print(table)
     console.print(f"\n[dim]Total: {total_models} model(s) across {len(providers)} provider(s)[/]")
+
+
+# ---------------------------------------------------------------------------
+# refresh — silently refresh an expired session
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="refresh")
+def refresh(
+    host: str = typer.Argument(
+        ..., help="Host name whose session should be refreshed (e.g. chatgpt.com)"
+    ),
+    silent: bool = typer.Option(
+        False,
+        "--silent",
+        help="Suppress stdout messages (log only)",
+    ),
+    max_age: Optional[int] = typer.Option(
+        None,
+        "--max-age",
+        help="Optional wall-clock age limit in seconds before considering the session expired",
+    ),
+) -> None:
+    """🔄 Refresh an expired or missing browser session.
+
+    Checks whether the stored session for *host* is still valid.  If it
+    has expired or does not exist, opens a Chromium window so you can
+    log in again.  The fresh cookies and ``localStorage`` are saved
+    automatically — no error is raised when the session was fine.
+
+    Examples::
+
+        llm-proxy refresh chatgpt.com
+        llm-proxy refresh api.openai.com --silent
+        llm-proxy refresh groq.com --max-age 3600
+    """
+    from src.utils.session import refresh_session as _refresh
+
+    console.print(
+        Panel.fit(
+            f"[bold]Session refresh[/]\n\n"
+            f"  Host: [cyan]{host}[/cyan]\n"
+            f"  Checking session validity...\n",
+            border_style="blue",
+        )
+    )
+
+    try:
+        state = _refresh(host, silent=silent, max_age_seconds=max_age)
+    except RuntimeError as exc:
+        console.print(f"\n[red]✗[/] {exc}")
+        raise typer.Exit(code=1)
+    except ValueError as exc:
+        console.print(f"\n[red]✗[/] {exc}")
+        raise typer.Exit(code=1)
+
+    cookie_count = len(state.get("cookies", []))
+    ls_count = len(state.get("localStorage", {}))
+
+    if not silent:
+        console.print()
+        console.print(
+            Panel.fit(
+                f"[bold green]✓ Session is valid[/bold green]\n\n"
+                f"  Host:    [cyan]{host}[/cyan]\n"
+                f"  Cookies: [green]{cookie_count}[/green]\n"
+                f"  Storage keys: [green]{ls_count}[/green]\n",
+                border_style="green",
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
