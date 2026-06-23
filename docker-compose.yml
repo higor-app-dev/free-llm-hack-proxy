@@ -1,0 +1,39 @@
+# =============================================================================
+# docker-compose.yml — Local development for free-llm-hack-proxy
+#
+# Usage:
+#   docker-compose up --build        # Build and start
+#   docker-compose up -d             # Start in background
+#   docker-compose down              # Stop and remove containers
+#   docker-compose logs -f           # Follow logs
+#
+# Volumes:
+#   ./src/              → /app/src/          (live code reload)
+#   ./config/llm-proxy/ → /root/.llm-proxy/  (persistent provider config)
+# =============================================================================
+
+services:
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+      - "8080:8080"
+
+    # Mount source for hot-reload — changes to .py files restart uvicorn
+    volumes:
+      - ./src:/app/src
+      # Persist provider configs and cache across restarts
+      - ./config/llm-proxy:/root/.llm-proxy
+
+    environment:
+      - LLM_PROXY_SERVER__RELOAD=true
+      - LLM_PROXY_SERVER__HOST=0.0.0.0
+      - LLM_PROXY_SERVER__PORT=8080
+      - PYTHONUNBUFFERED=1
+
+    # Override CMD to enable --reload for development
+    command: ["uvicorn", "src.proxy:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+    # Inherits HEALTHCHECK from the Dockerfile

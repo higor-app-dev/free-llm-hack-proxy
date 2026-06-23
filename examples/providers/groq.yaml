@@ -1,0 +1,31 @@
+# Provider configuration: Groq
+# Groq offers free inference for open-weight models via their API.
+# Copy this file to ~/.llm-proxy/providers/groq.yaml and fill in your API key.
+name: groq
+description: "Groq LPU Inference — fast open-weight models"
+base_url: "https://api.groq.com/openai/v1"
+api_key: ""  # set via LLM_PROXY_GROQ_API_KEY or fill here
+timeout_seconds: 30
+
+rate_limits:
+  requests_per_minute: 30
+  tokens_per_minute: 15000
+
+models:
+  - id: llama-3.3-70b-versatile
+    max_tokens: 32768
+    supports_streaming: true
+    supports_vision: false
+    supports_functions: true
+
+  - id: mixtral-8x7b-32768
+    max_tokens: 32768
+    supports_streaming: true
+    supports_vision: false
+    supports_functions: false
+
+  - id: gemma2-9b-it
+    max_tokens: 8192
+    supports_streaming: true
+    supports_vision: false
+    supports_functions: false

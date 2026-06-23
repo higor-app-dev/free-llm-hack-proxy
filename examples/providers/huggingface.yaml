@@ -1,0 +1,24 @@
+# Provider configuration: HuggingFace (free Inference API)
+# Uses the free tier at huggingface.co/api — no API key required for
+# some models (rate-limited heavily without a token).
+# Copy this file to ~/.llm-proxy/providers/huggingface.yaml.
+name: huggingface
+description: "HuggingFace Inference API — open models (free tier)"
+base_url: "https://api-inference.huggingface.co/models"
+timeout_seconds: 60
+
+rate_limits:
+  requests_per_minute: 30
+
+models:
+  - id: meta-llama/Llama-3.1-8B
+    max_tokens: 8192
+    supports_streaming: false
+    supports_vision: false
+    supports_functions: false
+
+  - id: microsoft/Phi-3-mini-4k-instruct
+    max_tokens: 4096
+    supports_streaming: false
+    supports_vision: false
+    supports_functions: false

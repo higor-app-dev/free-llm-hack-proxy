@@ -1,30 +1,39 @@
 #!/usr/bin/env python3
 """CLI for the free-llm-hack-proxy using Typer and Rich.
 
-Provides four commands:
-  - start:    Launch the proxy server
-  - chat:     Interactive chat loop
-  - models:   List available models
-  - test:     Run provider tests with latency metrics
+Four commands:
+  - start:   Launch the proxy server
+  - login:   Authenticate with a provider
+  - status:  Show connection health
+  - models:  List available models from a provider
 """
 
 from __future__ import annotations
 
-import time
+import os
+from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.live import Live
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.prompt import Prompt
 from rich.table import Table
-from rich.text import Text
+
+from src.config import (
+    CONFIG_DIR,
+    Config,
+    load_config,
+    ensure_config_dir,
+    get_config,
+)
+from src.providers import (
+    load_all_providers,
+    load_provider_config,
+)
 
 app = typer.Typer(
     name="llm-proxy",
-    help="🔓 Free LLM Hack Proxy — CLI for managing the proxy server and testing providers",
+    help="🔓 Free LLM Hack Proxy — CLI for managing the proxy and providers",
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
@@ -36,13 +45,24 @@ console = Console()
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _safe_import(module: str, attr: str, fallback: Optional[callable] = None) -> callable:
-    """Try to import *attr* from *module*; return *fallback* if it doesn't exist."""
-    try:
-        mod = __import__(module, fromlist=[attr])
-        return getattr(mod, attr, fallback)
-    except (ImportError, AttributeError):
-        return fallback
+def _ensure_config() -> Config:
+    """Ensure config directory exists, load and return config."""
+    ensure_config_dir()
+    return load_config()
+
+
+def _provider_table(title: str, border: str) -> Table:
+    """Create a standard provider table."""
+    table = Table(
+        title=title,
+        show_header=True,
+        header_style=f"bold {border}",
+        border_style=f"bright_{border}",
+    )
+    table.add_column("Provider", style="cyan", no_wrap=True)
+    table.add_column("Status", min_width=12)
+    table.add_column("Detail", style="white")
+    return table
 
 
 # ---------------------------------------------------------------------------
@@ -51,122 +71,327 @@ def _safe_import(module: str, attr: str, fallback: Optional[callable] = None) ->
 
 @app.command()
 def start(
-    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind the server"),
-    port: int = typer.Option(8080, "--port", "-p", help="Port to bind the server"),
-    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload on code changes"),
-    workers: int = typer.Option(1, "--workers", "-w", help="Number of worker processes"),
+    host: Optional[str] = typer.Option(
+        None, "--host", help="Override bind address from config"
+    ),
+    port: Optional[int] = typer.Option(
+        None, "--port", "-p", help="Override listen port from config"
+    ),
+    reload: Optional[bool] = typer.Option(
+        None, "--reload/--no-reload", help="Override auto-reload from config"
+    ),
+    workers: Optional[int] = typer.Option(
+        None, "--workers", "-w", help="Override worker count from config"
+    ),
 ) -> None:
     """🚀 Start the proxy server.
 
-    Launches the HTTP/HTTPS reverse proxy on the specified host and port.
+    Reads host, port, workers, and reload from the global config
+    (``~/.llm-proxy/config.yaml``).  CLI flags override config values.
     """
+    cfg = _ensure_config()
+    srv = cfg.server
+
+    actual_host = host or srv.host
+    actual_port = port or srv.port
+    actual_workers = workers if workers is not None else srv.workers
+    actual_reload = reload if reload is not None else srv.reload
+
     console.print(
         Panel.fit(
             f"[bold green]Starting proxy server[/]\n\n"
-            f"  [bold]Host:[/]     [yellow]{host}[/]\n"
-            f"  [bold]Port:[/]     [yellow]{port}[/]\n"
-            f"  [bold]Workers:[/]  [yellow]{workers}[/]\n"
-            f"  [bold]Reload:[/]   [yellow]{'on' if reload else 'off'}[/]",
+            f"  [bold]Host:[/]     [yellow]{actual_host}[/]\n"
+            f"  [bold]Port:[/]     [yellow]{actual_port}[/]\n"
+            f"  [bold]Workers:[/]  [yellow]{actual_workers}[/]\n"
+            f"  [bold]Reload:[/]   [yellow]{'on' if actual_reload else 'off'}[/]\n\n"
+            f"  [dim]Config:[/]    {CONFIG_DIR / 'config.yaml'}",
             title="🔓 [bold green]Free LLM Hack Proxy[/]",
             border_style="green",
         )
     )
 
-    start_server = _safe_import("src.proxy", "start_server")
-    if start_server is not None:
-        start_server(host=host, port=port, workers=workers, reload=reload)
-    else:
+    # Attempt to import and start the real proxy server
+    try:
+        from src.proxy import start_server as _start
+    except ImportError:
         console.print(
-            "[red]✗[/] Proxy server module not yet implemented.\n"
+            "\n[red]✗[/] Proxy server module not yet implemented.\n"
             "  [dim]Implement [bold]src.proxy.start_server[/] to enable this command.[/]"
         )
         raise typer.Exit(code=1)
 
+    _start(
+        host=actual_host,
+        port=actual_port,
+        workers=actual_workers,
+        reload=actual_reload,
+    )
+
 
 # ---------------------------------------------------------------------------
-# chat — interactive chat loop
+# login — authenticate with a provider
 # ---------------------------------------------------------------------------
 
 @app.command()
-def chat(
-    model: str = typer.Option("default", "--model", "-m", help="Model ID to use"),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Provider to route through"),
+def login(
+    provider: str = typer.Argument(
+        ..., help="Provider name (e.g. openai, anthropic, groq)"
+    ),
+    api_key: Optional[str] = typer.Option(
+        None, "--key", "-k", help="API key (prompted if not provided)"
+    ),
+    set_default: bool = typer.Option(
+        False, "--default", help="Also set this provider as the default"
+    ),
 ) -> None:
-    """💬 Open an interactive chat session with an LLM provider.
+    """🔑 Authenticate with an LLM provider.
 
-    Messages are sent through the proxy to the configured provider.
-    Use [bold]/exit[/] or [bold]/quit[/] to leave the session.
+    Saves the API key directly into the provider's YAML config file
+    under ``~/.llm-proxy/providers/<name>.yaml``.
+
+    If the provider config does not exist yet, creates one with just
+    the name and API key so you can add models later.
     """
-    console.print(
-        Panel.fit(
-            f"[bold cyan]Interactive Chat Session[/]\n\n"
-            f"  [bold]Model:[/]    [yellow]{model}[/]\n"
-            f"  [bold]Provider:[/] [yellow]{provider or 'auto'}[/]\n\n"
-            "  [dim]Type [bold]/exit[/] to quit • [bold]/model <name>[/] to switch[/]",
-            title="💬 [bold cyan]Chat[/]",
-            border_style="cyan",
+    provider_name = provider.strip().lower()
+    ensure_config_dir()
+
+    providers_dir = Path(get_config().providers_dir)
+    provider_path = providers_dir / f"{provider_name}.yaml"
+
+    # Resolve API key: flag, env var, or prompt
+    api_key_value = api_key
+    if not api_key_value:
+        env_key = f"LLM_PROXY_{provider_name.upper().replace('-', '_')}_API_KEY"
+        api_key_value = os.environ.get(env_key)
+    if not api_key_value:
+        api_key_value = typer.prompt(
+            f"API key for {provider_name}",
+            hide_input=True,
         )
-    )
 
-    while True:
-        try:
-            message = Prompt.ask("[bold blue]You[/]")
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[yellow]👋 Goodbye![/]")
-            break
+    # Load existing config or create a new one
+    from src.providers.models import ProviderConfig
 
-        text = message.strip()
-        if not text:
-            continue
+    base_url_for_validation: Optional[str] = None
 
-        if text.lower() in ("/exit", "/quit"):
-            console.print("[yellow]👋 Goodbye![/]")
-            break
+    if provider_path.exists():
+        existing = load_provider_config(provider_name, reload=True)
+        existing.api_key = api_key_value
+        existing.to_yaml(provider_path)
+        base_url_for_validation = existing.base_url
+        console.print(
+            f"[green]✓[/] Updated API key for [bold]{provider_name}[/] "
+            f"in [dim]{provider_path}[/]"
+        )
+    else:
+        new_cfg = ProviderConfig(
+            name=provider_name,
+            api_key=api_key_value,
+            description=f"{provider_name} (auto-configured)",
+        )
+        new_cfg.to_yaml(provider_path)
+        base_url_for_validation = new_cfg.base_url
+        console.print(
+            f"[green]✓[/] Created provider config [bold]{provider_name}[/] "
+            f"with API key in [dim]{provider_path}[/]"
+        )
 
-        if text.lower().startswith("/model"):
-            parts = text.split(maxsplit=1)
-            if len(parts) > 1:
-                model = parts[1]
-                console.print(f"[green]✓[/] Switched to model [bold]{model}[/]")
-            else:
-                console.print(f"[green]Current model:[/] [bold]{model}[/]")
-            continue
+    # Validate the key with a lightweight test
+    console.print(f"\n[yellow]Testing {provider_name} API key...[/]")
+    try:
+        import httpx
 
-        if text.lower().startswith("/provider"):
-            parts = text.split(maxsplit=1)
-            if len(parts) > 1:
-                provider = parts[1]
-                console.print(f"[green]✓[/] Switched to provider [bold]{provider}[/]")
-            else:
-                console.print(f"[green]Current provider:[/] [bold]{provider or 'auto'}[/]")
-            continue
-
-        # Attempt to use the providers module for real inference; fall back to stub.
-        chat_fn = _safe_import("src.providers", "chat")
-        if chat_fn is not None:
-            with console.status(f"[cyan]Thinking...[/]", spinner="dots"):
-                response = chat_fn(message, model=model, provider=provider)
-            console.print(f"[bold green]Assistant:[/] {response}")
-        else:
-            # Friendly placeholder until providers are wired up
-            console.print(
-                f"[bold green]Assistant:[/] [italic]🤖 Echo from {model} via "
-                f"{provider or 'auto'} — providers module not yet implemented.[/]"
+        if base_url_for_validation and "api.openai.com" in base_url_for_validation:
+            resp = httpx.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key_value}"},
+                timeout=10,
             )
+        elif base_url_for_validation and "api.anthropic.com" in base_url_for_validation:
+            resp = httpx.get(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "x-api-key": api_key_value,
+                    "anthropic-version": "2023-06-01",
+                },
+                timeout=10,
+            )
+        else:
+            # Generic test — just hit the base_url
+            resp = httpx.get(
+                base_url_for_validation or provider_name,
+                headers={
+                    "Authorization": f"Bearer {api_key_value}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+
+        if resp.status_code < 500:
+            console.print(f"[green]✓[/] API key validated — server returned {resp.status_code}")
+        else:
+            console.print(
+                f"[yellow]⚠[/] Key saved but validation returned "
+                f"{resp.status_code} — check if the key is correct"
+            )
+    except Exception as exc:
+        console.print(
+            f"[yellow]⚠[/] Key saved but could not validate: {exc}\n"
+            f"  [dim]The key is stored; validation requires network access.[/]"
+        )
+
+    if set_default:
+        _update_default_provider(provider_name)
+        console.print(f"[green]✓[/] Set [bold]{provider_name}[/] as the default provider")
+
+
+def _update_default_provider(name: str) -> None:
+    """Update the global config's default_provider field."""
+    config_path = CONFIG_DIR / "config.yaml"
+    import yaml
+
+    if config_path.exists():
+        raw = config_path.read_text(encoding="utf-8").strip()
+        data = yaml.safe_load(raw) or {} if raw else {}
+    else:
+        data = {}
+
+    data["default_provider"] = name
+    config_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 # ---------------------------------------------------------------------------
-# models — list available models
+# status — show connection health
+# ---------------------------------------------------------------------------
+
+@app.command()
+def status(
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed provider health"
+    ),
+) -> None:
+    """📊 Show the current system status.
+
+    Displays config health, loaded providers, API key availability,
+    and optional per-provider test results.
+    """
+    # --- Config Health ---
+    cfg = _ensure_config()
+
+    config_file = CONFIG_DIR / "config.yaml"
+    config_status = "[green]✓ present[/]" if config_file.exists() else "[yellow]⚠ using defaults[/]"
+
+    table = Table(
+        title="📊 System Status",
+        show_header=True,
+        header_style="bold cyan",
+        border_style="cyan",
+    )
+    table.add_column("Component", style="bold white", no_wrap=True)
+    table.add_column("Status", min_width=14)
+    table.add_column("Details", style="white")
+
+    table.add_row("Config file", config_status, str(config_file))
+    table.add_row(
+        "Default provider",
+        "[green]✓ set[/]" if cfg.default_provider else "[yellow]⚠ auto[/]",
+        cfg.default_provider or "auto-detect on first request",
+    )
+    table.add_row("Server", "[green]✓ configured[/]", f"{cfg.server.host}:{cfg.server.port}")
+    table.add_row("Logging", "[green]✓ configured[/]", f"level={cfg.logging.level}")
+    table.add_row("Cache", "[green]✓ configured[/]", f"{cfg.cache.backend} (ttl={cfg.cache.ttl_seconds}s)")
+
+    console.print(table)
+
+    # --- Provider Health ---
+    providers = load_all_providers()
+    if not providers:
+        console.print(
+            "\n[yellow]⚠ No provider configurations found.[/]\n"
+            "  Use [bold]llm-proxy login <provider>[/] to add one, or\n"
+            "  place YAML files in [dim]~/.llm-proxy/providers/[/]"
+        )
+    else:
+        ptable = _provider_table("📡 Providers", "green")
+        for name in sorted(providers):
+            cfg_prov = providers[name]
+            key = cfg_prov.resolve_api_key()
+            if key:
+                masked = key[:6] + "****" + key[-4:] if len(key) > 12 else "****"
+                key_status = f"[green]✓[/] key: {masked}"
+            else:
+                key_status = "[yellow]⚠ no API key[/]"
+
+            model_count = len(cfg_prov.models)
+            detail = f"{model_count} model(s) | {cfg_prov.description or ''}"
+            ptable.add_row(name, key_status, detail.strip())
+
+        console.print()
+        console.print(ptable)
+
+    # --- Verbose: test each provider ---
+    if verbose and providers:
+        console.print("\n[yellow]Running provider connectivity tests...[/]")
+        import httpx
+        import time
+
+        for name in sorted(providers):
+            cfg_prov = providers[name]
+            key = cfg_prov.resolve_api_key()
+            base = cfg_prov.base_url
+
+            if not key:
+                console.print(f"  [dim]{name}:[/] [yellow]skipped (no API key)[/]")
+                continue
+
+            try:
+                start = time.monotonic()
+                headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+                resp = httpx.get(base or "https://httpbin.org/get", headers=headers, timeout=10)
+                elapsed = round((time.monotonic() - start) * 1000)
+                if resp.status_code < 500:
+                    console.print(
+                        f"  [green]{name}:[/] ✓ {resp.status_code} in {elapsed}ms"
+                    )
+                else:
+                    console.print(
+                        f"  [red]{name}:[/] ✗ {resp.status_code} in {elapsed}ms"
+                    )
+            except Exception as exc:
+                console.print(f"  [red]{name}:[/] ✗ {exc}")
+
+
+# ---------------------------------------------------------------------------
+# models — list available models from providers
 # ---------------------------------------------------------------------------
 
 @app.command()
 def models(
-    provider: Optional[str] = typer.Option(None, "--provider", help="Filter by provider name"),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Filter by provider name"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show model details (tokens, cost, features)"
+    ),
 ) -> None:
     """🤖 List available LLM models across all providers.
 
-    Shows model IDs, their provider, and current health status.
+    Shows model IDs, their provider, capabilities, and cost information
+    as defined in the per-provider YAML config files.
     """
+    providers = load_all_providers()
+
+    if not providers:
+        console.print(
+            "[yellow]No provider configurations found.[/]\n"
+            "  Add providers via [bold]llm-proxy login <name>[/] or\n"
+            "  place YAML files in [dim]~/.llm-proxy/providers/[/]"
+        )
+        raise typer.Exit(0)
+
     table = Table(
         title="🤖 Available Models",
         show_header=True,
@@ -175,122 +400,56 @@ def models(
     )
     table.add_column("Provider", style="cyan", no_wrap=True)
     table.add_column("Model ID", style="white")
-    table.add_column("Status", min_width=12)
-    table.add_column("Latency (p50)", justify="right", style="dim")
-
-    list_models = _safe_import("src.providers", "list_models")
-    if list_models is not None:
-        models_data = list_models(provider=provider)
-        if not models_data:
-            console.print(f"[yellow]No models found[/] for provider [bold]{provider}[/]")
-            raise typer.Exit(0)
-        for m in models_data:
-            status_tag = f"[green]✓ online[/]" if m.get("online") else "[red]✗ offline[/]"
-            lat = f"{m.get('latency_ms', '—')}ms" if m.get("latency_ms") else "—"
-            table.add_row(m["provider"], m["id"], status_tag, lat)
+    if verbose:
+        table.add_column("Max Tokens", justify="right", style="dim")
+        table.add_column("Streaming", justify="center")
+        table.add_column("Vision", justify="center")
+        table.add_column("Functions", justify="center")
+        table.add_column("Cost/1K in", justify="right", style="green")
+        table.add_column("Cost/1K out", justify="right", style="green")
     else:
-        # Fallback stub data
-        stub = [
-            ("local",      "gpt-4o-mini",       "✓ online", "—"),
-            ("local",      "claude-3-haiku",     "✓ online", "—"),
-            ("huggingface", "meta-llama/Llama-3.1-8B", "✓ online", "—"),
-            ("huggingface", "microsoft/Phi-3-mini",    "✓ online", "—"),
-        ]
-        for prov, mod, status, lat in stub:
-            if provider is None or prov == provider:
-                table.add_row(prov, mod, status, lat)
+        table.add_column("Capabilities", style="dim")
 
-        console.print(
-            "[dim]Note: showing stub models — implement [bold]src.providers.list_models[/] "
-            "for live data.[/]\n"
-        )
+    total_models = 0
+    for name in sorted(providers):
+        if provider and name != provider:
+            continue
+        cfg_prov = providers[name]
+        for m in cfg_prov.models:
+            total_models += 1
+            if verbose:
+                cost_in = f"${m.cost_per_1k_input:.4f}" if m.cost_per_1k_input is not None else "—"
+                cost_out = f"${m.cost_per_1k_output:.4f}" if m.cost_per_1k_output is not None else "—"
+                table.add_row(
+                    name,
+                    m.id,
+                    str(m.max_tokens),
+                    "✓" if m.supports_streaming else "—",
+                    "✓" if m.supports_vision else "—",
+                    "✓" if m.supports_functions else "—",
+                    cost_in,
+                    cost_out,
+                )
+            else:
+                features = []
+                if m.supports_streaming:
+                    features.append("stream")
+                if m.supports_vision:
+                    features.append("vision")
+                if m.supports_functions:
+                    features.append("functions")
+                caps = ", ".join(features) if features else "—"
+                table.add_row(name, m.id, f"[dim]{caps}[/]")
+
+    if total_models == 0:
+        if provider:
+            console.print(f"[yellow]No models found[/] for provider [bold]{provider}[/]")
+        else:
+            console.print("[yellow]No models defined in any provider config.[/]")
+        raise typer.Exit(0)
 
     console.print(table)
-
-
-# ---------------------------------------------------------------------------
-# test — run provider tests
-# ---------------------------------------------------------------------------
-
-@app.command()
-def test(
-    provider: Optional[str] = typer.Option(None, "--provider", help="Specific provider to test"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error output"),
-) -> None:
-    """🧪 Run connectivity tests against providers and display latency.
-
-    Tests each provider's API endpoint, measures round-trip time,
-    and reports pass/fail status.
-    """
-    console.print(
-        Panel.fit(
-            "[bold yellow]Running provider tests...[/]",
-            title="🧪 [bold yellow]Provider Tests[/]",
-            border_style="yellow",
-        )
-    )
-
-    # Determine which providers to test
-    get_providers = _safe_import("src.providers", "get_providers")
-    if get_providers is not None:
-        providers_to_test = [provider] if provider else get_providers()
-    else:
-        providers_to_test = [provider] if provider else ["local", "huggingface", "groq"]
-
-    results = Table(show_header=True, header_style="bold yellow", border_style="bright_yellow")
-    results.add_column("Provider", style="cyan", no_wrap=True)
-    results.add_column("Status", min_width=12)
-    results.add_column("Latency", justify="right")
-    results.add_column("Error", style="red", max_width=50)
-
-    test_provider = _safe_import("src.providers", "test_provider")
-
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TimeElapsedColumn(),
-        console=console,
-    )
-
-    with progress:
-        task = progress.add_task(
-            f"[yellow]Testing {len(providers_to_test)} provider(s)...[/]",
-            total=len(providers_to_test),
-        )
-
-        for prov in providers_to_test:
-            start = time.monotonic()
-            try:
-                if test_provider is not None:
-                    result = test_provider(prov)
-                    elapsed = time.monotonic() - start
-                    if result.get("ok"):
-                        lat = result.get("latency_ms", round(elapsed * 1000))
-                        results.add_row(prov, "[green]✓ PASS[/]", f"{lat:.0f}ms", "")
-                    else:
-                        err = result.get("error", "Unknown error")
-                        results.add_row(prov, "[red]✗ FAIL[/]", f"{elapsed*1000:.0f}ms", err[:50] if verbose else "")
-                else:
-                    # Simulated test — placeholder until providers are wired
-                    time.sleep(0.3)
-                    elapsed = time.monotonic() - start
-                    lat = round(elapsed * 1000)
-                    results.add_row(prov, "[green]✓ PASS[/]", f"{lat}ms", "")
-            except Exception as exc:
-                elapsed = time.monotonic() - start
-                results.add_row(prov, "[red]✗ FAIL[/]", f"{elapsed*1000:.0f}ms", str(exc)[:50])
-
-            progress.update(task, advance=1)
-
-    console.print()
-    console.print(results)
-
-    if test_provider is None:
-        console.print(
-            "\n[dim]Note: tests are simulated — implement [bold]src.providers.test_provider[/] "
-            "for real results.[/]"
-        )
+    console.print(f"\n[dim]Total: {total_models} model(s) across {len(providers)} provider(s)[/]")
 
 
 # ---------------------------------------------------------------------------

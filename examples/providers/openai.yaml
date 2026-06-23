@@ -1,0 +1,36 @@
+# Provider configuration: OpenAI
+# Copy this file to ~/.llm-proxy/providers/openai.yaml and fill in your API key.
+name: openai
+description: "OpenAI API — GPT-4o, GPT-4o-mini, and o-series models"
+base_url: "https://api.openai.com/v1"
+api_key: ""  # set via LLM_PROXY_OPENAI_API_KEY or fill here
+timeout_seconds: 60
+
+rate_limits:
+  requests_per_minute: 500
+  tokens_per_minute: 200000
+
+models:
+  - id: gpt-4o
+    max_tokens: 128000
+    supports_streaming: true
+    supports_vision: true
+    supports_functions: true
+    cost_per_1k_input: 0.0025
+    cost_per_1k_output: 0.01
+
+  - id: gpt-4o-mini
+    max_tokens: 128000
+    supports_streaming: true
+    supports_vision: true
+    supports_functions: true
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.0006
+
+  - id: o3-mini
+    max_tokens: 200000
+    supports_streaming: true
+    supports_vision: false
+    supports_functions: true
+    cost_per_1k_input: 0.0011
+    cost_per_1k_output: 0.0044

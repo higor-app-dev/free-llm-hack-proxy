@@ -1,0 +1,28 @@
+# Provider configuration: Anthropic
+# Copy this file to ~/.llm-proxy/providers/anthropic.yaml and fill in your API key.
+name: anthropic
+description: "Anthropic API — Claude 4 and 3.5 series models"
+base_url: "https://api.anthropic.com/v1"
+api_key: ""  # set via LLM_PROXY_ANTHROPIC_API_KEY or fill here
+timeout_seconds: 120
+
+rate_limits:
+  requests_per_minute: 50
+  tokens_per_minute: 100000
+
+models:
+  - id: claude-sonnet-4
+    max_tokens: 200000
+    supports_streaming: true
+    supports_vision: true
+    supports_functions: true
+    cost_per_1k_input: 0.003
+    cost_per_1k_output: 0.015
+
+  - id: claude-haiku-3.5
+    max_tokens: 200000
+    supports_streaming: true
+    supports_vision: true
+    supports_functions: true
+    cost_per_1k_input: 0.0008
+    cost_per_1k_output: 0.004
