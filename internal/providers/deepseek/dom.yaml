@@ -1,0 +1,192 @@
+# DeepSeek Web Interface DOM Selectors
+# ======================================
+#
+# Target URL: https://chat.deepseek.com
+# Design system: DeepSeek internal ("ds-*" prefix) — stable class names
+# Framework: React SPA with hashed component class names (minified CSS)
+#
+# Selectors target stable design-system classes when possible,
+# falling back to structural/attribute patterns for hashed names.
+#
+# The `ds-*` classes are part of DeepSeek's design system and are
+# stable across deployments. Hashed classes (e.g. `.dc04ec1d`) may
+# change between builds — prefer the semantic alternatives below.
+
+# ---------------------------------------------------------------------------
+# Login / Authentication
+# ---------------------------------------------------------------------------
+login:
+  # Form container — used to determine if we're on the login page
+  form_container: ".ds-auth-form-wrapper"
+
+  # Phone / Email input field
+  email_field: ".ds-auth-form-wrapper input.ds-input__input[type='text']"
+
+  # Password input field
+  password_field: ".ds-auth-form-wrapper input.ds-input__input[type='password']"
+
+  # "Log in" submit button — it's the primary filled capsule button inside the form
+  submit_button: ".ds-auth-form-wrapper .ds-button--filled.ds-button--primary"
+
+  # Google OAuth button
+  google_auth: ".ds-sign-in-form__social-link:first-child"
+
+  # Apple OAuth button
+  apple_auth: ".ds-sign-in-form__social-link:last-child"
+
+  # "Forgot password?" link — useful for detecting form state
+  forgot_password: ".ds-sign-in-form__form-footer .ds-button--textInheritedPrimary:first-child"
+
+  # "Sign up" link
+  sign_up_link: ".ds-sign-in-form__form-footer .ds-button--textInheritedPrimary:last-child"
+
+  # Logo / icon area — indicates form header loaded
+  form_icon: ".ds-sign-in-form__icon"
+
+  # Cookie consent buttons (present on first visit before login form renders)
+  cookie_consent:
+    accept_all: "button:has-text('Accept all cookies')"
+    necessary_only: "button:has-text('Necessary cookies only')"
+
+# ---------------------------------------------------------------------------
+# Session Validation
+# ---------------------------------------------------------------------------
+session:
+  # Domain for cookie checks
+  cookie_domain: ".deepseek.com"
+
+  # Key cookies that indicate an authenticated session
+  cookie_indicators:
+    - name: "cloud_session"
+      description: "DeepSeek session token set after login"
+    - name: "sessionid"
+      description: "Alternative session identifier"
+    - name: "auth_token"
+      description: "Auth token used for API calls"
+
+  # localStorage key that stores auth state after login
+  local_storage_indicators:
+    - key: "token"
+      description: "JWT or auth token stored after login"
+    - key: "user"
+      description: "User profile JSON stored after login"
+    - key: "settings"
+      description: "User preferences — presence indicates logged-in state"
+
+  # Presence of the auth form wrapper after navigation = still logged out
+  logged_out_indicator: ".ds-auth-form-wrapper"
+
+  # Presence of chat sidebar = logged in
+  logged_in_indicator: ".dc04ec1d"
+
+  # Loading state during auth check
+  auth_loading: ".ds-authorized-container__loading"
+
+# ---------------------------------------------------------------------------
+# Chat Interface — Main Layout
+# ---------------------------------------------------------------------------
+chat:
+  # Root chat area container
+  container: "#root"
+
+  # Sidebar (conversation history, user avatar, search)
+  # Hashed class `.dc04ec1d` — fixed sidebar, 261px wide, collapsible
+  sidebar: ".dc04ec1d"
+
+  # Main chat panel (message list + input area)
+  main_panel: "._519be07"
+
+  # Message list container
+  # Hashed class `.cb86951c` — full-height flex, scrollable, virtual list
+  message_list: ".cb86951c"
+
+  # Virtual list wrapper used for large message histories
+  virtual_list: ".ds-virtual-list"
+
+  # Scrollable area inside the message list
+  scroll_area: ".ds-scroll-area"
+
+  # Chat input area (textarea + send button)
+  # Uses the design system `.ds-textarea` component with auto-height
+  input_area: ".ds-textarea"
+
+  # Send button (icon button with send icon)
+  send_button: "button.ds-button--icon:has(svg)"  # last icon button near textarea
+
+  # Stop generation button (appears during streaming)
+  stop_button: ".ds-button:has-text('Stop')"
+
+  # New chat / conversation button (in sidebar)
+  new_chat_button: "button:has-text('New Chat')"
+
+  # Status indicator (streaming vs idle)
+  # When DeepSeek is generating, a "Stop" button appears
+  generating_indicator: "button:has-text('Stop')"
+
+# ---------------------------------------------------------------------------
+# Response Extraction
+# ---------------------------------------------------------------------------
+response:
+  # All message blocks (both user + assistant) in the chat
+  # Each message is a child of the virtual list
+  message_blocks: ".ds-virtual-list > div > div"
+
+  # User message — appears before each assistant response
+  # Hashed class — identified by position in message list (every other)
+  user_message: ".ds-markdown"  # User messages also render markdown
+
+  # DeepSeek's chain-of-thought / reasoning section
+  # This appears before the final answer when reasoning is visible
+  think_content: ".ds-think-content"
+
+  # Assistant response container — rendered markdown
+  assistant_response: ".ds-markdown"  # Last `.ds-markdown` in the message pair
+
+  # The complete assistant message block (includes think + response + citations)
+  # Identified as `.ds-markdown` elements after the user's `.ds-markdown`
+  assistant_block: "._7780f2e"
+
+  # Citation markers — superscript-style footnote numbers in the response
+  citations: ".ds-markdown-cite"
+
+  # Code blocks within responses — language banner + copy button
+  code_blocks: ".md-code-block"
+
+  # Web search results section (when DeepSeek searches the web)
+  web_search_results: ".ds-markdown:has-text('Search results')"
+
+  # Math formula rendering (KaTeX)
+  math_content: ".ds-markdown-math"
+
+  # Error messages returned as responses
+  error_response: ".ds-alert--error"
+
+# ---------------------------------------------------------------------------
+# Prompt Submission — how to send a message and wait for a response
+# ---------------------------------------------------------------------------
+prompt:
+  # Fill the input with a query, then click send
+  fill_input: "textarea.ds-textarea textarea"
+  submit: ".ds-button--icon:has(svg)"  # send button
+
+  # Strategy for extracting the latest assistant response
+  # After submitting a prompt:
+  #   1. Wait for the "Stop" button to disappear (generation finished)
+  #   2. Read the last `.ds-markdown` element in the message list
+  wait_for_generation_end: "button:has-text('Stop')"  # wait for this to detach
+
+  # The last assistant message's content — stable path
+  latest_response: ".cb86951c .ds-markdown:last-of-type"
+
+# ---------------------------------------------------------------------------
+# Theme Detection
+# ---------------------------------------------------------------------------
+theme:
+  # Body class indicates light/dark theme
+  body_light: "body.light"
+  body_dark: "body[data-ds-dark-theme]"
+  theme_toggle: ".ds-theme"  # Theme switch button
+
+  # Detection — check body class
+  detection_selector: "body"
+  get_theme_js: "document.body.classList.contains('light') ? 'light' : 'dark'"

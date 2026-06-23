@@ -1,0 +1,212 @@
+# Xiaomi MiMo Studio Web Interface DOM Selectors
+# ===============================================
+#
+# Target URL: https://aistudio.xiaomimimo.com
+#      Login: https://account.xiaomi.com (Xiaomi Account SSO)
+# Design system: MiMo custom ("mimo-*" CSS variables + Tailwind utility classes)
+# Framework: React SPA with CSS modules (hashed class names e.g. style_*__f2100292)
+#
+# Xiaomi Account uses Ant Design components ("ant-*") plus a proprietary
+# "mi-*" design system. The MiMo Studio app uses Tailwind utility classes
+# backed by CSS variable tokens (--mimo-bg-message, --mimo-bg-input, etc.).
+#
+# Selectors target stable design-system classes and semantic patterns.
+# Hashed CSS module classes (e.g. style_code__f2100292) are described
+# as fallback patterns — prefer the semantic utility classes below.
+
+# ---------------------------------------------------------------------------
+# Login / Authentication (Xiaomi Account)
+# ---------------------------------------------------------------------------
+# The login flow redirects to account.xiaomi.com for SSO, then back to
+# aistudio.xiaomimimo.com with a session token.
+login:
+  # Form container — the main login form on the Xiaomi Account page
+  form_container: "form.mi-form"
+
+  # Email / Phone / Xiaomi Account ID input
+  email_field: "input.mi-input__input[type='text']"
+
+  # Password input field
+  password_field: ".mi-password-field input.mi-input__input[type='password']"
+
+  # "Sign in" submit button — primary-filled button inside the form
+  submit_button: "button.mi-button.mi-button--primary.mi-button--fullwidth"
+
+  # Google OAuth button
+  google_auth: "a.mi-button--primary .google-btn__name"
+
+  # Facebook OAuth button
+  facebook_auth: ".mi-sns-login__item:has-text('Facebook')"
+
+  # QR code login switch
+  qr_login_toggle: ".mi-qr-login-switch"
+
+  # "Forgot password?" link
+  forgot_password: "a.mi-external-url:has-text('Forgot password?')"
+
+  # "Sign up" link (tab)
+  sign_up_tab: ".ant-tabs-tab:has-text('Sign up')"
+
+  # Login tabs — toggles between password and verification-code login
+  login_tabs: ".ant-tabs-nav"
+
+  # Cookie consent banner (Xiaomi Account page)
+  cookie_consent:
+    accept_all: ".mi-cookie-banner__button:has-text('Accept')"
+    necessary_only: ".mi-cookie-banner__button:has-text('Reject')"
+
+  # Language picker
+  language_picker: ".mi-language-picker"
+
+  # Privacy policy checkbox
+  privacy_agreement: ".ant-checkbox-wrapper"
+
+# ---------------------------------------------------------------------------
+# Session Validation
+# ---------------------------------------------------------------------------
+session:
+  # Domain for cookie checks
+  cookie_domain: ".xiaomimimo.com"
+
+  # Key cookies that indicate an authenticated session
+  cookie_indicators:
+    - name: "serviceToken"
+      description: "Xiaomi account service token set after login"
+    - name: "session"
+      description: "Session cookie maintained by account.xiaomi.com"
+    - name: "userId"
+      description: "Xiaomi user ID stored after authentication"
+
+  # localStorage keys that store auth state after login
+  local_storage_indicators:
+    - key: "token"
+      description: "JWT token issued by MiMo API after Xiaomi SSO login"
+    - key: "userInfo"
+      description: "User profile JSON stored after login"
+    - key: "settings"
+      description: "User preferences — presence indicates logged-in state"
+
+  # Presence of the login form after navigation = still logged out
+  logged_out_indicator: "form.mi-form"
+
+  # Presence of the chat sidebar toggle = logged in
+  # When logged in, the sidebar has icons for MiMo Chat and MiMo Claw
+  logged_in_indicator: "button:has-text('MiMo Chat')"
+
+  # Loading state during auth check / SSO redirect
+  auth_loading: ".__page_loading"
+
+# ---------------------------------------------------------------------------
+# Chat Interface — Main Layout
+# ---------------------------------------------------------------------------
+chat:
+  # Root chat area container — full app wrapper
+  container: "#root"
+
+  # Sidebar (conversation history, navigation links)
+  sidebar: "div.w-\\[16rem\\]"  # 256px fixed sidebar width
+
+  # Sidebar visibility toggle buttons
+  sidebar_hide_button: "button:has-text('Hide sidebar')"
+  sidebar_show_button: "button:has-text('Show sidebar')"
+
+  # Main chat panel (message list + input area)
+  # Inner flex container behind the sidebar
+  main_panel: ".flex-1.overflow-hidden"
+
+  # Message list container — scrollable area between header and input
+  message_list: "div.min-h-0.flex-1"
+
+  # Scrollable area inside the message list
+  scroll_area: ".overscroll-contain"
+
+  # Chat input area — textarea for typing messages
+  # Uses the mimo-bg-input background token
+  input_area: ".bg-mimo-bg-input"
+
+  # Send button (icon button with send icon, inside the input area)
+  send_button: "button:has(svg[viewBox])"  # Icon button near textarea
+
+  # Stop generation button (appears during streaming response)
+  stop_button: "button:has-text('Stop')"
+
+  # New conversation button (in sidebar or header)
+  new_chat_button: "button:has-text('New conversation')"
+
+  # Status indicator (streaming vs idle)
+  # When MiMo is generating, scrollbar enters .scrollbar-outputting state
+  generating_indicator: ".scrollbar-outputting"
+
+# ---------------------------------------------------------------------------
+# Response Extraction
+# ---------------------------------------------------------------------------
+response:
+  # All message blocks (both user + assistant) in the chat
+  message_blocks: ".bg-mimo-bg-message, .bg-mimo-bg-ultra-user-message"
+
+  # User message — identified by custom background class
+  # Uses a slightly different background from assistant messages
+  user_message: ".bg-mimo-bg-ultra-user-message"
+
+  # Assistant response container — rendered markdown content
+  assistant_response: ".bg-mimo-bg-message"
+
+  # The complete assistant message block
+  # Wraps the markdown response plus any citations or code blocks
+  assistant_block: ".bg-mimo-bg-message"
+
+  # Markdown content within the response
+  # MiMo renders responses using a prose-style markdown component
+  markdown_content: ".markdown-prose"
+
+  # Code blocks within responses — language banner + copy button
+  code_blocks: ".code-line-numbers"
+
+  # Language label on code blocks (e.g. "python", "javascript")
+  code_language: ".languageLabel"
+
+  # Table content rendered in markdown
+  table_content: ".markdown-table-wrapper"
+
+  # Web search results section (when MiMo searches the web)
+  # Search results appear as collapsible source panels
+  web_search_results: "button:has-text('Sources')"
+
+  # Error messages returned as responses
+  error_response: ".text-red-500, [role='alert']"
+
+# ---------------------------------------------------------------------------
+# Prompt Submission — how to send a message and wait for a response
+# ---------------------------------------------------------------------------
+prompt:
+  # Fill the input with a query — target the textarea inside the input area
+  fill_input: ".bg-mimo-bg-input textarea"
+
+  # Send button — the submit icon button near the textarea
+  submit: "button:has(svg[viewBox])"
+
+  # Strategy for extracting the latest assistant response
+  # After submitting a prompt:
+  #   1. Wait for the scrollbar-outputting class to disappear (generation finished)
+  #   2. Read the last .bg-mimo-bg-message element in the message list
+  wait_for_generation_end: ".scrollbar-outputting"  # wait for this to detach
+
+  # The last assistant message's content — stable path
+  latest_response: ".bg-mimo-bg-message:last-of-type .markdown-prose"
+
+# ---------------------------------------------------------------------------
+# Theme Detection
+# ---------------------------------------------------------------------------
+# MiMo Studio stores theme preference in localStorage and applies a class
+# to the <html> element.
+theme:
+  # Dark/light mode is set via class on <html>
+  body_light: "html.light"
+  body_dark: "html.dark"
+
+  # Theme toggle button location
+  theme_toggle: "button:has-text('Theme')"
+
+  # Detection — check html class
+  detection_selector: "html"
+  get_theme_js: "document.documentElement.classList.contains('dark') ? 'dark' : 'light'"
