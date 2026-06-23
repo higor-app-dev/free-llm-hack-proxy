@@ -40,6 +40,28 @@ ENV_PREFIX = "LLM_PROXY_"
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 CacheBackend = Literal["sqlite", "redis", "memory"]
 
+# ---------------------------------------------------------------------------
+# Rate-limit sub-config
+# ---------------------------------------------------------------------------
+
+class RateLimitConfig(BaseModel):
+    """Settings for the global rate limiter on ``/v1/chat/completions``."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable rate limiting globally",
+    )
+    max_requests: int = Field(
+        default=60, ge=1, le=10_000,
+        description="Max requests allowed per sliding window",
+    )
+    window_seconds: int = Field(
+        default=60, ge=1, le=3600,
+        description="Width of the sliding window in seconds",
+    )
+
+    model_config = {"extra": "forbid"}
+
 
 # ---------------------------------------------------------------------------
 # Server sub-config
@@ -52,6 +74,14 @@ class ServerConfig(BaseModel):
     port: int = Field(default=8080, ge=1, le=65535, description="Listen port")
     workers: int = Field(default=1, ge=1, le=32, description="Worker processes")
     reload: bool = Field(default=False, description="Auto-reload on code changes")
+    max_slots: int = Field(
+        default=10, ge=1, le=512,
+        description="Max concurrent processing slots for the FIFO queue",
+    )
+    queue_timeout: int = Field(
+        default=30, ge=1, le=300,
+        description="Max seconds a request may wait in the FIFO queue before 503",
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -115,6 +145,7 @@ class Config(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
+    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
 
     model_config = {"extra": "forbid"}
 
@@ -205,6 +236,8 @@ def _apply_env_overrides(cfg: Config) -> Config:
     _maybe_set("server.port", "SERVER__PORT", int)
     _maybe_set("server.workers", "SERVER__WORKERS", int)
     _maybe_set("server.reload", "SERVER__RELOAD", bool)
+    _maybe_set("server.max_slots", "SERVER__MAX_SLOTS", int)
+    _maybe_set("server.queue_timeout", "SERVER__QUEUE_TIMEOUT", int)
 
     # Nested: logging.*
     _maybe_set("logging.level", "LOGGING__LEVEL", str)
@@ -214,6 +247,11 @@ def _apply_env_overrides(cfg: Config) -> Config:
     _maybe_set("cache.backend", "CACHE__BACKEND", str)
     _maybe_set("cache.path", "CACHE__PATH", str)
     _maybe_set("cache.ttl_seconds", "CACHE__TTL_SECONDS", int)
+
+    # Nested: rate_limit.*
+    _maybe_set("rate_limit.enabled", "RATE_LIMIT__ENABLED", bool)
+    _maybe_set("rate_limit.max_requests", "RATE_LIMIT__MAX_REQUESTS", int)
+    _maybe_set("rate_limit.window_seconds", "RATE_LIMIT__WINDOW_SECONDS", int)
 
     if update_data:
         # Deep-merge update_data into cfg's dict representation
