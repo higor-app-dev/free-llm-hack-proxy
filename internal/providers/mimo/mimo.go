@@ -233,12 +233,13 @@ func (p *Provider) Login(ctx context.Context, config providers.AuthConfig) error
 
 	log.Printf("mimo login: launching browser, timeout=%v", loginTimeout)
 
-	// Launch a visible browser so the user can log in manually.
-	// Non-headless mode is essential for the manual login flow.
+	// Launch a headless browser for automated login.
+	// Headless mode is used since this environment lacks a display server (WSL).
 	l := launcher.New().
-		Headless(false).
+		Headless(true).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
+		Set("--disable-software-rasterizer").
 		Set("--disable-dev-shm-usage")
 
 	loginURL := loginPageURL
@@ -411,6 +412,7 @@ func (p *Provider) promptOnce(ctx context.Context, model, question string) (*pro
 		Headless(true).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
+		Set("--disable-software-rasterizer").
 		Set("--disable-dev-shm-usage").
 		Set("--disable-blink-features=AutomationControlled")
 

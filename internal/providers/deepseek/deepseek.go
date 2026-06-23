@@ -240,9 +240,10 @@ func (p *Provider) Login(ctx context.Context, config providers.AuthConfig) error
 	// Launch a visible browser so the user can log in manually.
 	// Non-headless mode is essential for the manual login flow.
 	l := launcher.New().
-		Headless(false).
+		Headless(true).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
+		Set("--disable-software-rasterizer").
 		Set("--disable-dev-shm-usage")
 
 	loginURL := loginPageURL
@@ -404,9 +405,10 @@ func (p *Provider) promptOnce(ctx context.Context, model, question string) (*pro
 
 	// 3. Launch the browser.
 	l := launcher.New().
-		Headless(false).
+		Headless(true).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
+		Set("--disable-software-rasterizer").
 		Set("--disable-dev-shm-usage").
 		Set("--disable-blink-features=AutomationControlled")
 

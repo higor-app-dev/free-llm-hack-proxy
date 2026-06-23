@@ -2,6 +2,11 @@
 heartbeat_interval: 0s
 default_launch_opts:
   headless: true
+  extra_args:
+    - "--no-sandbox"
+    - "--disable-gpu"
+    - "--disable-software-rasterizer"
+    - "--disable-dev-shm-usage"
 providers:
   deepseek:
     slots: 0
