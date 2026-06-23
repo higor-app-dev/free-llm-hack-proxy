@@ -1,0 +1,71 @@
+# =============================================================================
+# CI pipeline for free-llm-hack-proxy
+#
+# Triggers: push + pull_request to main
+# Steps: lint (ruff) → build (install) → test (pytest) → docker (push only)
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── Lint ──────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff check
+        run: ruff check .
+
+  # ── Build & Test ─────────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install project
+        run: pip install .
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # ── Docker image build (push only — skip on PRs) ────────────────────
+  docker:
+    name: Docker Build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: free-llm-hack-proxy:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
