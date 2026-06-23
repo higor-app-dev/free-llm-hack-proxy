@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-llm-proxy = "src.cli.main:app"
+llm-proxy = "cli.main:app"
 
 [tool.ruff]
 line-length = 100
