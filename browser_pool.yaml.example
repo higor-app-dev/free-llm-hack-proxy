@@ -1,0 +1,37 @@
+# Browser Pool Configuration — free-llm-hack-proxy
+#
+# Controls how the browser pool manages go-rod instances for each LLM
+# provider's login/session flow.
+#
+# Location (searched in order):
+#   1. Path passed explicitly to LoadBrowserPoolConfig()
+#   2. $BROWSER_POOL_CONFIG environment variable
+#   3. ./browser_pool.yaml (project root)
+#
+# All fields are optional; missing fields use sensible defaults.
+# =============================================================================
+
+# Interval between browser instance liveness pings.
+# Default: 5m
+# heartbeat_interval: 5m
+
+# Pool-wide default browser launch options. Per-provider configs can
+# override individual fields.
+# default_launch_opts:
+#   headless: true
+#   window_size: "1920x1080"
+#   proxy: ""
+#   user_data_dir: ""
+#   extra_args: []
+
+# Per-provider browser pool configuration.
+# providers:
+#   deepseek:
+#     # Number of concurrent browser instances for this provider.
+#     slots: 1
+#     # Optional per-provider launch options (merges over pool defaults).
+#     # launch_opts:
+#     #   headless: true
+#     #   window_size: "1280x720"
+#   mimo:
+#     slots: 1
