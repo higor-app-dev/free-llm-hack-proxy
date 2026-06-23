@@ -206,6 +206,14 @@ func TestBrowserPoolConfig_ConfigPath(t *testing.T) {
 	}
 
 	// No file -> empty path
+	// Change to a temp directory so viper won't find browser_pool.yaml at the project root.
+	origDir, _ := os.Getwd()
+	emptyDir := t.TempDir()
+	if err := os.Chdir(emptyDir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
 	cfg2, err := LoadBrowserPoolConfig("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
