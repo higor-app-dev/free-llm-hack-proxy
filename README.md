@@ -6,31 +6,46 @@ Proxy para acessar LLMs gratuitamente via APIs públicas — um laboratório de 
 
 ## Stack
 
-- **Linguagem:** Python 3.11+
-- **Proxy HTTP:** aiohttp / httpx
-- **CLI / Dashboard:** typer + rich
-- **Cache:** SQLite (local) / Redis (opcional)
+- **Linguagem:** Go 1.22+
+- **Proxy HTTP:** net/http padrão
+- **Browser automation:** Playwright via chromedp
+- **Banco:** SQLite via modernc.org/sqlite
 
 ## Estrutura
 
 ```
 free-llm-hack-proxy/
-├── src/
-│   ├── __init__.py
-│   ├── proxy/          — servidor proxy principal
-│   ├── providers/      — adapters por provider (HuggingFace, Groq, etc.)
-│   ├── utils/          — ferramentas compartilhadas
-│   └── cli/            — interface de linha de comando
-├── tests/
-├── config/
-├── .gitignore
+├── cmd/
+│   └── main.go              — entrypoint principal
+├── internal/
+│   ├── api/                 — handlers HTTP (OpenAI-compatible)
+│   ├── browser/             — automação de navegador (chromedp)
+│   ├── config/              — parsing de config (flags, env)
+│   ├── providers/           — adapters por provider (DeepSeek, MiMo, etc.)
+│   └── session/             — gerenciamento de sessões browser
+├── .env.example
+├── go.mod
+├── Makefile
 └── README.md
+```
+
+## Quickstart
+
+```bash
+# build
+make build
+
+# run
+make run
+
+# tests
+make test
 ```
 
 ## Roadmap
 
 - [ ] Descoberta de endpoints gratuitos
-- [ ] Proxy HTTP transparente
+- [ ] Proxy HTTP transparente (OpenAI-compatible)
 - [ ] Rate limit bypass
 - [ ] Cache inteligente de respostas
 - [ ] Dashboard de monitoramento

@@ -1,14 +1,9 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-.venv/
-venv/
-env/
+# Go
+bin/
+*.exe
+*.test
+*.out
+vendor/
 
 # Environment
 .env
@@ -32,3 +27,6 @@ logs/
 
 # Hermes
 .hermes/
+
+# Data
+data/

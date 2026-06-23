@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Start server with test key
+# Start server with test key (Go version)
 set -euo pipefail
-cd /home/higor/free-llm-hack-proxy
+cd "$(dirname "$0")/.."
 
-export LLM_PROXY_API_KEY='sk-test-key-12345'
-export LLM_PROXY_SERVER__PORT='18084'
-export LLM_PROXY_RATE_LIMIT__ENABLED='false'
+export PORT='18084'
+export LOG_LEVEL='debug'
 
-exec python3 -m uvicorn src.proxy:app --host 127.0.0.1 --port 18084 --log-level info
+exec go run ./cmd/
