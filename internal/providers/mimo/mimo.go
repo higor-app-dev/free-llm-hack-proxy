@@ -233,10 +233,11 @@ func (p *Provider) Login(ctx context.Context, config providers.AuthConfig) error
 
 	log.Printf("mimo login: launching browser, timeout=%v", loginTimeout)
 
-	// Launch a headless browser for automated login.
-	// Headless mode is used since this environment lacks a display server (WSL).
+	// Launch a visible browser for manual login.
+	// Non-headless mode lets the user see and interact with the login form.
+	// Requires an X server (VcXsrv, WSLg, etc.) on the Windows host.
 	l := launcher.New().
-		Headless(true).
+		Headless(false).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
 		Set("--disable-software-rasterizer").

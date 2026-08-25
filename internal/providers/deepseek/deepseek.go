@@ -237,10 +237,11 @@ func (p *Provider) Login(ctx context.Context, config providers.AuthConfig) error
 
 	log.Printf("deepseek login: launching browser, timeout=%v", loginTimeout)
 
-	// Launch a visible browser so the user can log in manually.
-	// Non-headless mode is essential for the manual login flow.
+	// Launch a visible browser for manual login.
+	// Non-headless mode lets the user see and interact with the login form.
+	// Requires an X server (VcXsrv, WSLg, etc.) on the Windows host.
 	l := launcher.New().
-		Headless(true).
+		Headless(false).
 		Set("--no-sandbox").
 		Set("--disable-gpu").
 		Set("--disable-software-rasterizer").
